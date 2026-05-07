@@ -41,7 +41,9 @@ class PerceptronFacesClassifier:
         set during `train`.
         """
         # TODO: initialize self.weights (shape: rows x cols) and self.bias.
-        raise NotImplementedError
+        self.max_iterations = max_iterations
+        self.weights = np.zeros(image_shape, dtype=float)
+        self.bias = 0.0
 
     def train(self, training_images: np.ndarray, training_labels: np.ndarray) -> None:
         """Fit the perceptron on training data.
@@ -50,17 +52,30 @@ class PerceptronFacesClassifier:
         shape (N,) with values in {0, 1}.
         """
         # TODO: implement the binary perceptron update rule.
-        raise NotImplementedError
+        for _ in range(self.max_iterations):
+            for image, label in zip(training_images, training_labels):
+                score = np.sum(self.weights * image) + self.bias
+                pred = 1 if score >= 0 else 0
+                if pred != label:
+                    # Convert label to -1 or +1 so update direction is simple.
+                    direction = 1 if label == 1 else -1
+                    self.weights += direction * image
+                    self.bias += float(direction)
 
     def predict(self, image: np.ndarray) -> int:
         """Predict 0 or 1 for a single 70x60 image."""
         # TODO: return 1 if w . x + b >= 0 else 0.
-        raise NotImplementedError
+        score = np.sum(self.weights * image) + self.bias
+        return 1 if score >= 0 else 0
 
     def evaluate(self, images: np.ndarray, labels: np.ndarray) -> float:
         """Return classification accuracy in [0, 1] over a batch."""
         # TODO: loop over images, call self.predict, compare with labels.
-        raise NotImplementedError
+        correct = 0
+        for image, label in zip(images, labels):
+            if self.predict(image) == label:
+                correct += 1
+        return correct / len(labels) if len(labels) > 0 else 0.0
 
 
 def main(training_percent: int, num_iterations: int = 5) -> dict:

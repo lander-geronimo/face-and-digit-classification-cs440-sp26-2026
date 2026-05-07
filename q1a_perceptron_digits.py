@@ -44,7 +44,10 @@ class PerceptronDigitsClassifier:
         """
         # TODO: initialize self.weights (shape: num_classes x rows x cols
         # or num_classes x rows*cols) and self.biases (shape: num_classes).
-        raise NotImplementedError
+        rows, cols = image_shape
+        self.max_iterations = max_iterations
+        self.weights = np.zeros((num_classes, rows * cols), dtype=float)
+        self.biases = np.zeros(num_classes, dtype=float)
 
     def train(self, training_images: np.ndarray, training_labels: np.ndarray) -> None:
         """Fit the perceptron on training data.
@@ -55,17 +58,34 @@ class PerceptronDigitsClassifier:
         # TODO: for each epoch and each example, compute class scores,
         # find argmax, and (if wrong) update the true class and the
         # mispredicted class weights and biases.
-        raise NotImplementedError
+        x_flat = training_images.reshape(training_images.shape[0], -1)
+
+        for _ in range(self.max_iterations):
+            for image, true_label in zip(x_flat, training_labels):
+                scores = np.dot(self.weights, image) + self.biases
+                pred_label = int(np.argmax(scores))
+                if pred_label != true_label:
+                    # Push weights toward the true label and away from wrong label.
+                    self.weights[true_label] += image
+                    self.weights[pred_label] -= image
+                    self.biases[true_label] += 1.0
+                    self.biases[pred_label] -= 1.0
 
     def predict(self, image: np.ndarray) -> int:
         """Predict a label in {0..9} for a single 28x28 image."""
         # TODO: compute w_y . x + b_y for every class and return argmax.
-        raise NotImplementedError
+        x_flat = image.reshape(-1)
+        scores = np.dot(self.weights, x_flat) + self.biases
+        return int(np.argmax(scores))
 
     def evaluate(self, images: np.ndarray, labels: np.ndarray) -> float:
         """Return classification accuracy in [0, 1] over a batch."""
         # TODO: loop over images, call self.predict, compare with labels.
-        raise NotImplementedError
+        correct = 0
+        for image, label in zip(images, labels):
+            if self.predict(image) == label:
+                correct += 1
+        return correct / len(labels) if len(labels) > 0 else 0.0
 
 
 def main(training_percent: int, num_iterations: int = 5) -> dict:
