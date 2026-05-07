@@ -54,7 +54,22 @@ class ScratchNeuralNetworkDigits:
         """Initialise network hyperparameters and weight matrices."""
         # TODO: initialize self.W1, self.b1, self.W2, self.b2, self.W3,
         # self.b3 and store the hyperparameters.
-        raise NotImplementedError
+        self.input_size = input_size
+        self.hidden1_size = hidden1_size
+        self.hidden2_size = hidden2_size
+        self.output_size = output_size
+        self.learning_rate = learning_rate
+        self.num_epochs = num_epochs
+        self.batch_size = batch_size
+
+        rng = np.random.default_rng(seed)
+        self.W1 = rng.normal(0.0, np.sqrt(2.0 / input_size), size=(input_size, hidden1_size))
+        self.b1 = np.zeros((1, hidden1_size))
+        self.W2 = rng.normal(0.0, np.sqrt(2.0 / hidden1_size), size=(hidden1_size, hidden2_size))
+        self.b2 = np.zeros((1, hidden2_size))
+        self.W3 = rng.normal(0.0, np.sqrt(2.0 / hidden2_size), size=(hidden2_size, output_size))
+        self.b3 = np.zeros((1, output_size))
+        self.cache = {}
 
     def forward(self, X: np.ndarray) -> np.ndarray:
         """Forward pass.
@@ -68,7 +83,18 @@ class ScratchNeuralNetworkDigits:
         # z2 = a1 W2 + b2 ; a2 = activation(z2)
         # z3 = a2 W3 + b3 ; y_hat = softmax(z3)
         # Cache intermediates (e.g. self.cache) for the backward pass.
-        raise NotImplementedError
+        z1 = X @ self.W1 + self.b1
+        a1 = np.maximum(0.0, z1)
+        z2 = a1 @ self.W2 + self.b2
+        a2 = np.maximum(0.0, z2)
+        z3 = a2 @ self.W3 + self.b3
+
+        z3_shift = z3 - np.max(z3, axis=1, keepdims=True)
+        exp_scores = np.exp(z3_shift)
+        y_hat = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+
+        self.cache = {"X": X, "z1": z1, "a1": a1, "z2": z2, "a2": a2, "y_hat": y_hat}
+        return y_hat
 
     def backward(self, X: np.ndarray, y_onehot: np.ndarray) -> dict:
         """Back propagate loss gradients through the network.
@@ -78,12 +104,38 @@ class ScratchNeuralNetworkDigits:
         `{"dW1": ..., "db1": ..., "dW2": ..., "db2": ..., "dW3": ..., "db3": ...}`.
         """
         # TODO: compute gradients of the loss w.r.t. each weight and bias.
-        raise NotImplementedError
+        m = X.shape[0]
+        y_hat = self.cache["y_hat"]
+        a2 = self.cache["a2"]
+        z2 = self.cache["z2"]
+        a1 = self.cache["a1"]
+        z1 = self.cache["z1"]
+
+        dz3 = (y_hat - y_onehot) / m
+        dW3 = a2.T @ dz3
+        db3 = np.sum(dz3, axis=0, keepdims=True)
+
+        da2 = dz3 @ self.W3.T
+        dz2 = da2 * (z2 > 0)
+        dW2 = a1.T @ dz2
+        db2 = np.sum(dz2, axis=0, keepdims=True)
+
+        da1 = dz2 @ self.W2.T
+        dz1 = da1 * (z1 > 0)
+        dW1 = X.T @ dz1
+        db1 = np.sum(dz1, axis=0, keepdims=True)
+
+        return {"dW1": dW1, "db1": db1, "dW2": dW2, "db2": db2, "dW3": dW3, "db3": db3}
 
     def update_weights(self, grads: dict) -> None:
         """Apply one gradient descent step using `grads` from `backward`."""
         # TODO: self.W1 -= self.learning_rate * grads["dW1"]  (etc.)
-        raise NotImplementedError
+        self.W1 -= self.learning_rate * grads["dW1"]
+        self.b1 -= self.learning_rate * grads["db1"]
+        self.W2 -= self.learning_rate * grads["dW2"]
+        self.b2 -= self.learning_rate * grads["db2"]
+        self.W3 -= self.learning_rate * grads["dW3"]
+        self.b3 -= self.learning_rate * grads["db3"]
 
     def train(self, training_images: np.ndarray, training_labels: np.ndarray) -> None:
         """Full training loop: epochs and mini batches.
@@ -93,17 +145,41 @@ class ScratchNeuralNetworkDigits:
         """
         # TODO: flatten images, one hot encode labels, loop over epochs
         # and mini batches, and call forward -> backward -> update_weights.
-        raise NotImplementedError
+        X = flatten_images(training_images)
+        y = training_labels.astype(int)
+        n = X.shape[0]
+
+        for _ in range(self.num_epochs):
+            perm = np.random.permutation(n)
+            X_shuffled = X[perm]
+            y_shuffled = y[perm]
+
+            for start in range(0, n, self.batch_size):
+                end = min(start + self.batch_size, n)
+                xb = X_shuffled[start:end]
+                yb = y_shuffled[start:end]
+
+                y_onehot = np.zeros((yb.shape[0], self.output_size))
+                y_onehot[np.arange(yb.shape[0]), yb] = 1.0
+
+                self.forward(xb)
+                grads = self.backward(xb, y_onehot)
+                self.update_weights(grads)
 
     def predict(self, image: np.ndarray) -> int:
         """Predict a single label in {0..9} for a 28x28 image."""
         # TODO: flatten, run forward, argmax over the output layer.
-        raise NotImplementedError
+        x = image.reshape(1, -1)
+        probs = self.forward(x)
+        return int(np.argmax(probs, axis=1)[0])
 
     def evaluate(self, images: np.ndarray, labels: np.ndarray) -> float:
         """Return classification accuracy on a batch of images."""
         # TODO: vectorised: flatten all, forward once, argmax, compare.
-        raise NotImplementedError
+        X = flatten_images(images)
+        probs = self.forward(X)
+        preds = np.argmax(probs, axis=1)
+        return float(np.mean(preds == labels))
 
 
 def main(training_percent: int, num_iterations: int = 5) -> dict:
