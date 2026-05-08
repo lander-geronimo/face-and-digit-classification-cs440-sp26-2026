@@ -42,12 +42,17 @@ class PyTorchNeuralNetworkDigits(nn.Module):
         """Construct `nn.Linear` and activation modules for each layer."""
         super().__init__()
         # TODO: define self.fc1, self.fc2, self.fc3 and an activation.
-        raise NotImplementedError
+        self.fc1 = nn.Linear(input_size, hidden1_size)
+        self.fc2 = nn.Linear(hidden1_size, hidden2_size)
+        self.fc3 = nn.Linear(hidden2_size, output_size)
+        self.act = nn.ReLU()
 
     def forward(self, x: "torch.Tensor") -> "torch.Tensor":
         """Forward pass returning raw logits of shape (N, 10)."""
         # TODO: return self.fc3(act(self.fc2(act(self.fc1(x)))))
-        raise NotImplementedError
+        x = self.act(self.fc1(x))
+        x = self.act(self.fc2(x))
+        return self.fc3(x)
 
 
 class PyTorchDigitsClassifier:
@@ -69,7 +74,17 @@ class PyTorchDigitsClassifier:
         # self.criterion = nn.CrossEntropyLoss()
         # self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
         # Store epoch and batch size.
-        raise NotImplementedError
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = PyTorchNeuralNetworkDigits(
+            input_size=28 * 28,
+            hidden1_size=hidden1_size,
+            hidden2_size=hidden2_size,
+            output_size=10,
+        ).to(self.device)
+        self.criterion = nn.CrossEntropyLoss()
+        self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
+        self.num_epochs = num_epochs
+        self.batch_size = batch_size
 
     def train(self, training_images: np.ndarray, training_labels: np.ndarray) -> None:
         """Fit the PyTorch model on the provided training data.
@@ -80,17 +95,55 @@ class PyTorchDigitsClassifier:
         # TODO: convert numpy to tensors, build a DataLoader with
         # self.batch_size, then run self.num_epochs epochs of
         # forward, backward, optimizer.step().
-        raise NotImplementedError
+        X = flatten_images(training_images).astype(np.float32)
+        y = training_labels.astype(np.int64)
+
+        X_tensor = torch.from_numpy(X)
+        y_tensor = torch.from_numpy(y)
+        loader = DataLoader(
+            TensorDataset(X_tensor, y_tensor),
+            batch_size=self.batch_size,
+            shuffle=True,
+        )
+
+        self.model.train()
+        for _ in range(self.num_epochs):
+            for xb, yb in loader:
+                xb = xb.to(self.device)
+                yb = yb.to(self.device)
+
+                self.optimizer.zero_grad(set_to_none=True)
+                logits = self.model(xb)
+                loss = self.criterion(logits, yb)
+                loss.backward()
+                self.optimizer.step()
 
     def predict(self, image: np.ndarray) -> int:
         """Predict a single label in {0..9} for a 28x28 image."""
         # TODO: flatten, tensor, forward, argmax, return int.
-        raise NotImplementedError
+        X = image.reshape(1, -1).astype(np.float32)
+        x_tensor = torch.from_numpy(X).to(self.device)
+        self.model.eval()
+        with torch.no_grad():
+            logits = self.model(x_tensor)
+            pred = int(torch.argmax(logits, dim=1).item())
+        return pred
 
     def evaluate(self, images: np.ndarray, labels: np.ndarray) -> float:
         """Return classification accuracy on a batch of images."""
         # TODO: vectorised eval in torch.no_grad() mode.
-        raise NotImplementedError
+        X = flatten_images(images).astype(np.float32)
+        y = labels.astype(np.int64)
+
+        x_tensor = torch.from_numpy(X).to(self.device)
+        y_tensor = torch.from_numpy(y).to(self.device)
+
+        self.model.eval()
+        with torch.no_grad():
+            logits = self.model(x_tensor)
+            preds = torch.argmax(logits, dim=1)
+            acc = (preds == y_tensor).float().mean().item()
+        return float(acc)
 
 
 def main(training_percent: int, num_iterations: int = 5) -> dict:
